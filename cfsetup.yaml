@@ -1,9 +1,9 @@
-pinned_go: &pinned_go go-boring=1.22.5-1
+pinned_go: &pinned_go go-boring=1.24.4-1
 
 build_dir: &build_dir /cfsetup_build
 default-flavor: bookworm
 
-bullseye: &bullseye
+bookworm: &bookworm
   build-linux:
     build_dir: *build_dir
     builddeps: &build_deps
@@ -13,10 +13,14 @@ bullseye: &bullseye
       - rubygem-fpm
       - rpm
       - libffi-dev
+      - golangci-lint=1.64.8-2
     pre-cache: &build_pre_cache
       - export GOCACHE=/cfsetup_build/.cache/go-build
-      - go install golang.org/x/tools/cmd/goimports@latest
+      - go install golang.org/x/tools/cmd/goimports@v0.30.0
     post-cache:
+      # Linting
+      - make lint
+      - make fmt-check
       # Build binary for component test
       - GOOS=linux GOARCH=amd64 make cloudflared
   build-linux-fips:
@@ -119,28 +123,6 @@ bullseye: &bullseye
       - export GOOS=linux
       - export GOARCH=arm64
       - make cloudflared-deb
-  package-windows:
-    build_dir: *build_dir
-    builddeps:
-      - *pinned_go
-      - build-essential
-      - python3-dev
-      - libffi-dev
-      - python3-setuptools
-      - python3-pip
-      - wget
-      # libmsi and libgcab are libraries the wixl binary depends on.
-      - libmsi-dev
-      - libgcab-dev
-      - python3-venv
-    pre-cache:
-      - wget https://github.com/sudarshan-reddy/msitools/releases/download/v0.101b/wixl -P /usr/local/bin
-      - chmod a+x /usr/local/bin/wixl
-    post-cache:
-      - python3 -m venv env
-      - . env/bin/activate
-      - pip install pynacl==1.4.0 pygithub==1.55
-      - .teamcity/package-windows.sh
   test:
     build_dir: *build_dir
     builddeps: &build_deps_tests
@@ -156,7 +138,6 @@ bullseye: &bullseye
       - export GOOS=linux
       - export GOARCH=amd64
       - export PATH="$HOME/go/bin:$PATH"
-      - ./fmt-check.sh
       - make test | gotest-to-teamcity
   test-fips:
     build_dir: *build_dir
@@ -167,7 +148,6 @@ bullseye: &bullseye
       - export GOARCH=amd64
       - export FIPS=true
       - export PATH="$HOME/go/bin:$PATH"
-      - ./fmt-check.sh
       - make test | gotest-to-teamcity
   component-test:
     build_dir: *build_dir
@@ -231,7 +211,7 @@ bullseye: &bullseye
       - make github-release
   r2-linux-release:
     build_dir: *build_dir
-    builddeps:
+    builddeps: &r2-linux-release-deps
       - *pinned_go
       - build-essential
       - fakeroot
@@ -251,5 +231,13 @@ bullseye: &bullseye
       - pip install pynacl==1.4.0 pygithub==1.55 boto3==1.22.9 python-gnupg==0.4.9
       - make r2-linux-release
 
-bookworm: *bullseye
-trixie: *bullseye
+  r2-next-linux-release:
+    build_dir: *build_dir
+    builddeps: *r2-linux-release-deps
+    post-cache:
+      - python3 -m venv env
+      - . env/bin/activate
+      - pip install pynacl==1.4.0 pygithub==1.55 boto3==1.22.9 python-gnupg==0.4.9
+      - make r2-next-linux-release
+
+trixie: *bookworm
